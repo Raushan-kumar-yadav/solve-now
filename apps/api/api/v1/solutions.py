@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, desc
 from typing import List
 import uuid
 import logging
@@ -102,20 +102,22 @@ def get_solutions(
         Solution.problem_id == problem.id,
         Solution.is_hidden == False
     ).order_by(
-        desc(Solution.upvotes - Solution.downvotes), 
         desc(Solution.created_at)
     ).all()
     
-    # Check user votes
+    # Calculate votes and verifications for response
     for sol in solutions:
         sol.user_vote = 0
+        sol.upvotes = sum(1 for v in sol.votes if v.value == 1)
+        sol.downvotes = sum(1 for v in sol.votes if v.value == -1)
+        sol.verification_count = len(sol.verifications)
         if current_user:
-            vote = db.query(SolutionVote).filter(
-                SolutionVote.solution_id == sol.id, 
-                SolutionVote.user_id == current_user.id
-            ).first()
+            vote = next((v for v in sol.votes if v.user_id == current_user.id), None)
             if vote:
-                sol.user_vote = vote.vote_value
+                sol.user_vote = vote.value
+                
+    # Sort in memory by net votes (upvotes - downvotes)
+    solutions.sort(key=lambda s: (s.upvotes - s.downvotes), reverse=True)
                 
     return solutions
 

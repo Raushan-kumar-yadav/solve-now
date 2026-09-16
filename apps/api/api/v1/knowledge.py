@@ -27,7 +27,7 @@ class KnowledgeSearchResponse(BaseModel):
 
 @router.get("/search", response_model=List[KnowledgeSearchResponse])
 def search_knowledge(
-    q: str,
+    q: Optional[str] = "",
     category: Optional[str] = None,
     verified_only: bool = False,
     db: Session = Depends(get_db)
@@ -36,8 +36,25 @@ def search_knowledge(
     Hybrid Search combining pgvector and Full Text Search.
     Ranking = (Vector Similarity) + (FTS Rank) + (0.1 * log(verification_count + 1)) + (0.01 * quality_score)
     """
-    if not q.strip():
-        return []
+    if not q or not q.strip():
+        # If no query is provided, return recent verified knowledge
+        results = db.query(KnowledgeDocument).filter(
+            KnowledgeDocument.status == 'PUBLISHED'
+        ).order_by(desc(KnowledgeDocument.created_at)).limit(20).all()
+        
+        response = []
+        for r in results:
+            response.append(KnowledgeSearchResponse(
+                id=r.id,
+                title=r.title,
+                content_snippet=r.content[:200] + "..." if len(r.content) > 200 else r.content,
+                category=r.category.name if r.category else None,
+                quality_score=r.quality_score,
+                verification_count=r.verification_count,
+                relevance=1.0,
+                created_at=r.created_at
+            ))
+        return response
         
     emb = generate_embedding(q)
     

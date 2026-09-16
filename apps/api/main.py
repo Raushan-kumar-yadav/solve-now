@@ -116,13 +116,17 @@ if not settings.is_production:
 if settings.NEXT_PUBLIC_APP_URL and settings.NEXT_PUBLIC_APP_URL not in _cors_origins:
     _cors_origins.append(settings.NEXT_PUBLIC_APP_URL)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
-)
+kwargs = {
+    "allow_origins": _cors_origins,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+
+if not settings.is_production:
+    kwargs["allow_origin_regex"] = r"https?://.*"
+
+app.add_middleware(CORSMiddleware, **kwargs)
 
 # Body size limit middleware
 class LimitUploadSize(BaseHTTPMiddleware):

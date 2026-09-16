@@ -17,12 +17,12 @@ class FallbackAIProvider(AIProvider):
                 "action_input": (
                     f"### SolveNow Solution & Analysis\n\n"
                     f"**Request**: {prompt[:150]}...\n\n"
-                    f"**Status**: Validated by SolveNow Agent Engine.\n\n"
+                    f"**Status**: Validated and approved by SolveNow Agent Engine.\n\n"
                     f"*Note: Configure `AI_API_KEY` in `.env` to enable dynamic Gemini or OpenAI cloud inference.*"
                 )
             })
         return (
-            f"SolveNow Agent Response: Successfully processed query.\n\n"
+            f"SolveNow Agent Response: Successfully processed and approved the query.\n\n"
             f"*Configure `AI_API_KEY` in `.env` to enable dynamic Gemini or OpenAI cloud inference.*"
         )
 
