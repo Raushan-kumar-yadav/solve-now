@@ -1,39 +1,94 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from typing import List, Optional
+from typing import List
 import uuid
-from datetime import datetime
-from pydantic import BaseModel
+import asyncio
 
-from core.database import get_db
+from core.database import get_db, SessionLocal
 from models.user import User
 from models.problem import Problem
 from models.room import ProblemRoom, RoomMember, RoomMessage
+from schemas.room import RoomResponse, MessageResponse, MessageBase
 from api.deps import get_current_user
-from .ws import manager
+from api.v1.ws import manager
+from services.ai.factory import get_ai_provider
+from services.ai.agents.problem_orchestrator import ProblemOrchestrator
 
 router = APIRouter()
 
-class MessageBase(BaseModel):
-    content: str
+def get_or_create_ai_bot_user(db: Session) -> User:
+    ai_user = db.query(User).filter(User.email == "ai-assistant@solvenow.internal").first()
+    if not ai_user:
+        ai_user = User(
+            email="ai-assistant@solvenow.internal",
+            hashed_password="system-managed-bot-account",
+            is_active=True,
+            is_verified=True,
+            reputation_score=500
+        )
+        db.add(ai_user)
+        db.commit()
+        db.refresh(ai_user)
+    return ai_user
 
-class MessageResponse(MessageBase):
-    id: uuid.UUID
-    room_id: uuid.UUID
-    author_id: uuid.UUID
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
+async def process_room_ai_mention(room_id: str, problem_id: uuid.UUID, prompt: str):
+    await asyncio.sleep(0.5)
+    db = SessionLocal()
+    try:
+        problem = db.query(Problem).filter(Problem.id == problem_id).first()
+        context = f"Problem: {problem.title}\nDescription: {problem.description}" if problem else ""
 
-class RoomResponse(BaseModel):
-    id: uuid.UUID
-    problem_id: uuid.UUID
-    is_active: bool
-    
-    class Config:
-        from_attributes = True
+        provider = get_ai_provider()
+        orchestrator = ProblemOrchestrator(provider)
+        res = orchestrator.orchestrate(message=prompt, problem_context=context)
+        ai_response_text = res.get("response", "I have reviewed the problem.")
+
+        bot_user = get_or_create_ai_bot_user(db)
+        ai_msg = RoomMessage(
+            room_id=uuid.UUID(room_id),
+            author_id=bot_user.id,
+            content=f"🤖 **[SolveNow AI Assistant]**:\n{ai_response_text}"
+        )
+        db.add(ai_msg)
+        db.commit()
+        db.refresh(ai_msg)
+
+        await manager.broadcast_to_room(room_id, {
+            "type": "message.created",
+            "payload": {
+                "id": str(ai_msg.id),
+                "content": ai_msg.content,
+                "author_id": str(ai_msg.author_id),
+                "author_email": "ai-assistant@solvenow.internal",
+                "created_at": ai_msg.created_at.isoformat()
+            }
+        })
+    except Exception as e:
+        # Fallback broadcast error message
+        try:
+            bot_user = get_or_create_ai_bot_user(db)
+            err_msg = RoomMessage(
+                room_id=uuid.UUID(room_id),
+                author_id=bot_user.id,
+                content=f"🤖 **[SolveNow AI]**: Could not complete request: {str(e)}"
+            )
+            db.add(err_msg)
+            db.commit()
+            db.refresh(err_msg)
+            await manager.broadcast_to_room(room_id, {
+                "type": "message.created",
+                "payload": {
+                    "id": str(err_msg.id),
+                    "content": err_msg.content,
+                    "author_id": str(err_msg.author_id),
+                    "author_email": "ai-assistant@solvenow.internal",
+                    "created_at": err_msg.created_at.isoformat()
+                }
+            })
+        except Exception:
+            pass
+    finally:
+        db.close()
 
 @router.get("/problems/{public_id}/room", response_model=RoomResponse)
 def get_or_create_room(
@@ -69,7 +124,6 @@ def get_room_messages(
         if not member:
             raise HTTPException(status_code=403, detail="Not authorized to enter this private room")
             
-    # We should order by created_at asc for chat history
     messages = db.query(RoomMessage).filter(RoomMessage.room_id == room_id).order_by(RoomMessage.created_at.asc()).all()
     return messages
 
@@ -77,6 +131,7 @@ def get_room_messages(
 async def create_message(
     room_id: uuid.UUID,
     msg_in: MessageBase,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -98,7 +153,7 @@ async def create_message(
     db.commit()
     db.refresh(msg)
     
-    # Broadcast via WS Manager
+    # Broadcast user's message via WS Manager
     await manager.broadcast_to_room(str(room_id), {
         "type": "message.created",
         "payload": {
@@ -109,6 +164,11 @@ async def create_message(
             "created_at": msg.created_at.isoformat()
         }
     })
+
+    # Check for @ai mention in room chat
+    content_stripped = msg_in.content.strip()
+    if content_stripped.lower().startswith("@ai"):
+        ai_query = content_stripped[3:].strip() or "Please help analyze this problem with the room participants."
+        asyncio.create_task(process_room_ai_mention(str(room_id), room.problem_id, ai_query))
     
     return msg
-

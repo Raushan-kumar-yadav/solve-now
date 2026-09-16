@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
@@ -54,6 +54,25 @@ export default function ProblemDetail() {
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editDesc, setEditDesc] = useState('')
+
+  const [solvingWithAI, setSolvingWithAI] = useState(false)
+  const [aiSolveResult, setAiSolveResult] = useState<any>(null)
+
+  const handleRunAISolve = async () => {
+    setSolvingWithAI(true)
+    try {
+      const res = await api.post('/ai/solve', {
+        problem_id_or_public_id: publicId,
+        include_files: true
+      })
+      setAiSolveResult(res.data)
+      fetchData()
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'AI solve failed')
+    } finally {
+      setSolvingWithAI(false)
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -236,12 +255,64 @@ export default function ProblemDetail() {
 
   const AIPanel = () => (
     <Card className="h-full border-0 shadow-none sm:border sm:shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> AI Investigation</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-lg flex items-center gap-2"><Activity className="h-5 w-5 text-primary" /> AI Multi-Agent</CardTitle>
+        <Button
+          size="sm"
+          onClick={handleRunAISolve}
+          disabled={solvingWithAI}
+          className="h-8 text-xs font-semibold gap-1.5"
+        >
+          <Activity className={`h-3.5 w-3.5 ${solvingWithAI ? 'animate-spin' : ''}`} />
+          {solvingWithAI ? 'Solving...' : 'Run AI Solve'}
+        </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {solvingWithAI && (
+          <div className="flex items-center space-x-2 text-muted-foreground p-3 bg-primary/5 rounded-lg border border-primary/20 animate-pulse">
+            <div className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span></div>
+            <span className="text-xs font-medium">Orchestrating agents, executing tools, and verifying solution...</span>
+          </div>
+        )}
+
+        {aiSolveResult && (
+          <div className="p-3 bg-card border rounded-lg space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-primary px-2 py-0.5 rounded bg-primary/10">
+                {aiSolveResult.agent_role || 'Verified Solution'}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-[11px]"
+                onClick={() => {
+                  setNewSolution(aiSolveResult.response)
+                  alert('Solution copied to collaborative solutions draft box!')
+                }}
+              >
+                Copy to Post Box
+              </Button>
+            </div>
+            <p className="text-xs whitespace-pre-wrap leading-relaxed text-foreground bg-muted/20 p-2.5 rounded border">
+              {aiSolveResult.response}
+            </p>
+
+            {aiSolveResult.activity_steps?.length > 0 && (
+              <div className="border-t pt-2 space-y-1">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">AI Activity Trace:</span>
+                {aiSolveResult.activity_steps.map((st: any, i: number) => (
+                  <div key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                    <span><strong className="text-foreground">[{st.step}]</strong> {st.description}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {['CREATED', 'ANALYZING', 'RESEARCHING', 'DIAGNOSING', 'GENERATING', 'REVIEWING'].includes(problem.investigation?.status || '') ? (
-          <div className="flex items-center space-x-2 text-muted-foreground mb-4 p-3 bg-muted/30 rounded-lg border">
+          <div className="flex items-center space-x-2 text-muted-foreground p-3 bg-muted/30 rounded-lg border">
             <div className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span></div>
             <span className="text-sm font-medium">AI is {problem.investigation?.status.toLowerCase()}...</span>
           </div>
@@ -295,8 +366,8 @@ export default function ProblemDetail() {
               </div>
             )}
           </div>
-        ) : (
-          <EmptyState title="No AI insights yet" description="AI will analyze the problem shortly." />
+        ) : !aiSolveResult && (
+          <EmptyState title="No AI insights yet" description="Click 'Run AI Solve' or 'Ask AI' to orchestrate specialized agents." />
         )}
       </CardContent>
     </Card>
@@ -316,7 +387,7 @@ export default function ProblemDetail() {
               <span className="flex items-center"><History className="h-3 w-3 mr-1"/> {formatDistanceToNow(new Date(problem.created_at))} ago</span>
               {!problem.is_public && <span className="text-amber-600 border border-amber-200 bg-amber-50 px-2 py-0.5 rounded text-xs font-medium">Private Workspace</span>}
               <ReportButton entityType="problem" entityId={problem.id} />
-              <AIChatModal problemContext={`Title: \nDescription: `} />
+              <AIChatModal problemContext={`Title: ${problem.title}\nDescription: ${problem.description}`} />
             </div>
           </div>
           
