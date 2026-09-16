@@ -60,3 +60,4 @@ class DocumentProcessor:
             start += (chunk_size - overlap)
 
         return chunks
+

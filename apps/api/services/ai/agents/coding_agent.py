@@ -25,3 +25,4 @@ class CodingAgent:
             system_context += f"\n\nAttached Files:\n{files_context}"
 
         return self.agent.run(prompt=prompt, system_context=system_context)
+

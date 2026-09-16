@@ -21,7 +21,10 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      await api.post('/auth/login', { email, password })
+      const res = await api.post('/auth/login', { email, password })
+      if (res.data?.access_token) {
+        localStorage.setItem('access_token', res.data.access_token)
+      }
       router.push('/')
       router.refresh()
     } catch (err: any) {

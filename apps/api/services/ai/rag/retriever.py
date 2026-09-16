@@ -31,3 +31,4 @@ class RAGRetriever:
         # Sort descending by score
         scored_chunks.sort(key=lambda x: x[0], reverse=True)
         return [item[1] for item in scored_chunks[:top_k]]
+

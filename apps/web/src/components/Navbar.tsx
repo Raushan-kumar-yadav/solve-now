@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
@@ -27,9 +27,14 @@ export function Navbar() {
 
   const handleLogout = async () => {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token')
+      }
       await api.post('/auth/logout')
       window.location.href = '/'
-    } catch {}
+    } catch {
+      window.location.href = '/'
+    }
   }
 
   const navLinks = [

@@ -23,7 +23,10 @@ export default function Register() {
     try {
       await api.post('/auth/register', { email, password })
       // Auto login after register
-      await api.post('/auth/login', { email, password })
+      const res = await api.post('/auth/login', { email, password })
+      if (res.data?.access_token) {
+        localStorage.setItem('access_token', res.data.access_token)
+      }
       router.push('/')
       router.refresh()
     } catch (err: any) {

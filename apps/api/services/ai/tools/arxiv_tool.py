@@ -50,3 +50,4 @@ class ArxivTool(BaseTool):
                 return "\n\n---\n\n".join(results)
         except Exception as e:
             return f"arXiv search error: {str(e)}"
+

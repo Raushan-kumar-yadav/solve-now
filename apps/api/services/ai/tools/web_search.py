@@ -71,3 +71,4 @@ class WebSearchTool(BaseTool):
                 return f"Web search for '{query}' completed, but returned concise or general index entries."
         except Exception as e:
             return f"Search notice: External web search temporarily unavailable ({str(e)}). Proceeding with model knowledge."
+

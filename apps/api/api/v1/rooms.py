@@ -119,9 +119,9 @@ def get_room_messages(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
         
-    if room.is_private:
+    if room.problem and not room.problem.is_public:
         member = db.query(RoomMember).filter(RoomMember.room_id == room.id, RoomMember.user_id == current_user.id).first()
-        if not member:
+        if not member and room.problem.author_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to enter this private room")
             
     messages = db.query(RoomMessage).filter(RoomMessage.room_id == room_id).order_by(RoomMessage.created_at.asc()).all()
@@ -139,9 +139,9 @@ async def create_message(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
         
-    if room.is_private:
+    if room.problem and not room.problem.is_public:
         member = db.query(RoomMember).filter(RoomMember.room_id == room.id, RoomMember.user_id == current_user.id).first()
-        if not member:
+        if not member and room.problem.author_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to post in this private room")
             
     msg = RoomMessage(

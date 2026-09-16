@@ -1,4 +1,7 @@
 import unittest
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.ai.tools.python_repl import PythonREPLTool
 from services.ai.tools.wikipedia_tool import WikipediaTool
 from services.ai.tools.arxiv_tool import ArxivTool
@@ -36,3 +39,4 @@ class TestAIEngine(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -12,6 +12,7 @@ from models.solution import Solution, SolutionVote, SolutionVerification, Soluti
 from schemas.solution import SolutionCreate, SolutionUpdate, SolutionResponse, SolutionVoteCreate, SolutionCommentCreate, SolutionCommentResponse
 from api.deps import get_current_user, get_current_user_optional
 from services.ai.knowledge_worker import run_knowledge_extraction
+from services.reputation import ReputationService, ReputationRules
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -138,49 +139,45 @@ def vote_solution(
     ).first()
     
     rep_service = ReputationService(db)
+    val = getattr(vote_in, "value", None)
+    if val is None:
+        val = getattr(vote_in, "vote_value", 0)
+    category_id = solution.problem.category_id if solution.problem else None
     
     if vote:
-        if vote_in.vote_value == 0:
+        if val == 0:
             # Revert old vote
-            if vote.vote_value == 1:
-                solution.upvotes -= 1
+            if vote.value == 1:
                 rep_service.revoke_points(solution.author_id, "UPVOTE", ReputationRules.UPVOTE_RECEIVED, solution.problem_id, solution.id)
-            elif vote.vote_value == -1:
-                solution.downvotes -= 1
+            elif vote.value == -1:
                 rep_service.revoke_points(solution.author_id, "DOWNVOTE", ReputationRules.DOWNVOTE_RECEIVED, solution.problem_id, solution.id)
             db.delete(vote)
         else:
-            if vote.vote_value != vote_in.vote_value:
+            if vote.value != val:
                 # Revert old
-                if vote.vote_value == 1:
-                    solution.upvotes -= 1
+                if vote.value == 1:
                     rep_service.revoke_points(solution.author_id, "UPVOTE", ReputationRules.UPVOTE_RECEIVED, solution.problem_id, solution.id)
-                elif vote.vote_value == -1:
-                    solution.downvotes -= 1
+                elif vote.value == -1:
                     rep_service.revoke_points(solution.author_id, "DOWNVOTE", ReputationRules.DOWNVOTE_RECEIVED, solution.problem_id, solution.id)
                 
                 # Apply new
-                vote.vote_value = vote_in.vote_value
-                if vote_in.vote_value == 1:
-                    solution.upvotes += 1
-                    rep_service.award_points(solution.author_id, "UPVOTE_RECEIVED", ReputationRules.UPVOTE_RECEIVED, solution.problem_id, solution.id, solution.problem.category_id)
-                elif vote_in.vote_value == -1:
-                    solution.downvotes += 1
-                    rep_service.award_points(solution.author_id, "DOWNVOTE_RECEIVED", ReputationRules.DOWNVOTE_RECEIVED, solution.problem_id, solution.id, solution.problem.category_id)
+                vote.value = val
+                if val == 1:
+                    rep_service.award_points(solution.author_id, "UPVOTE_RECEIVED", ReputationRules.UPVOTE_RECEIVED, solution.problem_id, solution.id, category_id)
+                elif val == -1:
+                    rep_service.award_points(solution.author_id, "DOWNVOTE_RECEIVED", ReputationRules.DOWNVOTE_RECEIVED, solution.problem_id, solution.id, category_id)
     else:
-        if vote_in.vote_value != 0:
+        if val != 0:
             vote = SolutionVote(
                 solution_id=solution.id,
                 user_id=current_user.id,
-                vote_value=vote_in.vote_value
+                value=val
             )
             db.add(vote)
-            if vote_in.vote_value == 1:
-                solution.upvotes += 1
-                rep_service.award_points(solution.author_id, "UPVOTE_RECEIVED", ReputationRules.UPVOTE_RECEIVED, solution.problem_id, solution.id, solution.problem.category_id)
-            elif vote_in.vote_value == -1:
-                solution.downvotes += 1
-                rep_service.award_points(solution.author_id, "DOWNVOTE_RECEIVED", ReputationRules.DOWNVOTE_RECEIVED, solution.problem_id, solution.id, solution.problem.category_id)
+            if val == 1:
+                rep_service.award_points(solution.author_id, "UPVOTE_RECEIVED", ReputationRules.UPVOTE_RECEIVED, solution.problem_id, solution.id, category_id)
+            elif val == -1:
+                rep_service.award_points(solution.author_id, "DOWNVOTE_RECEIVED", ReputationRules.DOWNVOTE_RECEIVED, solution.problem_id, solution.id, category_id)
                 
     db.commit()
     return {"message": "Vote recorded"}
@@ -212,10 +209,9 @@ def verify_solution(
     )
     db.add(new_verification)
     
-    solution.verification_count += 1
-    
     rep_service = ReputationService(db)
-    rep_service.award_points(solution.author_id, "SOLUTION_VERIFIED", ReputationRules.SOLUTION_VERIFIED, solution.problem_id, solution.id, solution.problem.category_id)
+    category_id = solution.problem.category_id if solution.problem else None
+    rep_service.award_points(solution.author_id, "SOLUTION_VERIFIED", ReputationRules.SOLUTION_VERIFIED, solution.problem_id, solution.id, category_id)
     
     db.commit()
     return {"message": "Solution verified"}

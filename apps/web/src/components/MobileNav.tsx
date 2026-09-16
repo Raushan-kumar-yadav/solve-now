@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -24,10 +24,12 @@ export function MobileNav() {
 
   const handleLogout = async () => {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token')
+      }
       await api.post('/auth/logout')
       window.location.href = '/'
     } catch (e) {
-      console.error("Logout failed", e)
       window.location.href = '/'
     }
   }

@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, Depends, Request, Response
+from fastapi import FastAPI, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -105,8 +105,13 @@ if settings.is_production and not settings.NEXT_PUBLIC_API_URL:
 _cors_origins = (
     [settings.NEXT_PUBLIC_API_URL]
     if settings.NEXT_PUBLIC_API_URL
-    else ["http://localhost:3000"]
+    else ["http://localhost:3000", "http://127.0.0.1:3000"]
 )
+if not settings.is_production:
+    if "http://localhost:3000" not in _cors_origins:
+        _cors_origins.append("http://localhost:3000")
+    if "http://127.0.0.1:3000" not in _cors_origins:
+        _cors_origins.append("http://127.0.0.1:3000")
 # Allow both API URL and APP URL if they differ (e.g. api.example.com serving app.example.com)
 if settings.NEXT_PUBLIC_APP_URL and settings.NEXT_PUBLIC_APP_URL not in _cors_origins:
     _cors_origins.append(settings.NEXT_PUBLIC_APP_URL)

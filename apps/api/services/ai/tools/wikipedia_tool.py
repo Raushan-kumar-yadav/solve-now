@@ -35,3 +35,4 @@ class WikipediaTool(BaseTool):
             return f"Wikipedia request error: HTTP {he.code}"
         except Exception as e:
             return f"Wikipedia lookup error: {str(e)}"
+

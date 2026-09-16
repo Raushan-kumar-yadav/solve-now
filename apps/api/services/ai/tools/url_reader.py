@@ -36,3 +36,4 @@ class URLReaderTool(BaseTool):
                 return text or "Webpage loaded but contained no readable text."
         except Exception as e:
             return f"Failed to fetch content from URL '{url}': {str(e)}"
+

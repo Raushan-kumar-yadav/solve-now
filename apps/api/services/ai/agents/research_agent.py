@@ -26,3 +26,4 @@ class ResearchAgent:
             system_context += f"\n\nContext:\n{context}"
 
         return self.agent.run(prompt=topic, system_context=system_context)
+
