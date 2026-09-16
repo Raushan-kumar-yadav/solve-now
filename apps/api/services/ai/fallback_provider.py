@@ -25,3 +25,4 @@ class FallbackAIProvider(AIProvider):
             f"SolveNow Agent Response: Successfully processed query.\n\n"
             f"*Configure `AI_API_KEY` in `.env` to enable dynamic Gemini or OpenAI cloud inference.*"
         )
+

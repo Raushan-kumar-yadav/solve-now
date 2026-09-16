@@ -71,6 +71,7 @@ class S3StorageProvider:
         else:
             import aiofiles
             path = os.path.join(self.local_base, storage_key)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             async with aiofiles.open(path, "wb") as out:
                 while chunk := await file.read(1024 * 1024):
                     await out.write(chunk)

@@ -1,4 +1,4 @@
-﻿from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import Optional
 import os
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
     # --- Database ---
+    DATABASE_URL: Optional[str] = None
     POSTGRES_SERVER: str = "postgres"
     POSTGRES_USER: str = "solvenow"
     POSTGRES_PASSWORD: str = ""
@@ -74,9 +75,25 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
+        if self.DATABASE_URL:
+            raw = self.DATABASE_URL
+            if "://" in raw and "@" in raw:
+                scheme, remainder = raw.split("://", 1)
+                userinfo, host_part = remainder.rsplit("@", 1)
+                if ":" in userinfo:
+                    user, pwd = userinfo.split(":", 1)
+                    user_unquoted = urllib.parse.unquote(user)
+                    pwd_unquoted = urllib.parse.unquote(pwd)
+                    user_encoded = urllib.parse.quote_plus(user_unquoted)
+                    pwd_encoded = urllib.parse.quote_plus(pwd_unquoted)
+                    if scheme in ("postgresql", "postgres"):
+                        scheme = "postgresql+pg8000"
+                    return f"{scheme}://{user_encoded}:{pwd_encoded}@{host_part}"
+            return raw
+
         # Prevent "user@hostname" parsing bugs when passwords contain @
-        user = urllib.parse.quote_plus(self.POSTGRES_USER)
-        password = urllib.parse.quote_plus(self.POSTGRES_PASSWORD)
+        user = urllib.parse.quote_plus(urllib.parse.unquote(self.POSTGRES_USER))
+        password = urllib.parse.quote_plus(urllib.parse.unquote(self.POSTGRES_PASSWORD))
         return (
             f"postgresql+pg8000://{user}:{password}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

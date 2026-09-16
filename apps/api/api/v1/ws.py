@@ -107,6 +107,12 @@ async def _authenticate_websocket(websocket: WebSocket, db: Session) -> User | N
     """
     token = websocket.cookies.get("access_token")
     if not token:
+        token = websocket.query_params.get("token")
+    if not token:
+        auth_hdr = websocket.headers.get("Authorization")
+        if auth_hdr and auth_hdr.startswith("Bearer "):
+            token = auth_hdr[7:]
+    if not token:
         return None
     if token.startswith("Bearer "):
         token = token[7:]

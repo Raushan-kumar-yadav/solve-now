@@ -61,3 +61,7 @@ celerybeat.pid
 htmlcov/
 .pytest_cache/
 
+# Local File Storage
+storage/
+apps/api/storage/
+

@@ -31,7 +31,9 @@ export function RoomChat({ publicId, currentUser }: { publicId: string, currentU
     if (ws.current && ws.current.readyState === WebSocket.OPEN) return
 
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
-    const socket = new WebSocket(`${wsUrl}/api/v1/ws/rooms/${roomId}`)
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+    const socketUrl = `${wsUrl}/api/v1/ws/rooms/${roomId}${token ? `?token=${encodeURIComponent(token)}` : ''}`
+    const socket = new WebSocket(socketUrl)
 
     socket.onopen = () => {
       setConnected(true)
