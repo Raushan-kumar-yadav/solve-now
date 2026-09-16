@@ -1,0 +1,88 @@
+services:
+  db:
+    image: ankane/pgvector:v0.5.1
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-solvenow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-solvenow}
+      POSTGRES_DB: ${POSTGRES_DB:-solvenow}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-solvenow} -d ${POSTGRES_DB:-solvenow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: ../../infrastructure/docker/api.Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=${POSTGRES_USER:-solvenow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-solvenow}
+      - POSTGRES_DB=${POSTGRES_DB:-solvenow}
+      - REDIS_HOST=redis
+      - ENVIRONMENT=development
+      - AI_API_KEY=${AI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: ../../infrastructure/docker/worker.Dockerfile
+    volumes:
+      - ./apps/api:/app
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=${POSTGRES_USER:-solvenow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-solvenow}
+      - POSTGRES_DB=${POSTGRES_DB:-solvenow}
+      - REDIS_HOST=redis
+      - ENVIRONMENT=development
+      - AI_API_KEY=${AI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: ../../infrastructure/docker/web.Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:

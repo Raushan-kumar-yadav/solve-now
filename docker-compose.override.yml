@@ -1,0 +1,53 @@
+﻿services:
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    command: redis-server
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: ../../infrastructure/docker/api.Dockerfile
+    volumes:
+      - ./apps/api:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      ENVIRONMENT: development
+      POSTGRES_SERVER: db
+      POSTGRES_USER: ${POSTGRES_USER:-solvenow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-solvenow}
+      POSTGRES_DB: ${POSTGRES_DB:-solvenow}
+      REDIS_HOST: redis
+      SECRET_KEY: dev-only-insecure-secret-key-do-not-use-in-production
+      AI_API_KEY: ${AI_API_KEY:-}
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: ../../infrastructure/docker/worker.Dockerfile
+    volumes:
+      - ./apps/api:/app
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A worker.celery_app inspect ping || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: ../../infrastructure/docker/web.Dockerfile
+    environment:
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

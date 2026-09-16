@@ -1,0 +1,37 @@
+groups:
+  - name: solvenow_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(starlette_requests_total{status_code=~"5.."}[5m]) / rate(starlette_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate on SolveNow API"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(starlette_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency on SolveNow API"
+          description: "P95 latency is {{ $value }}s"
+
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+

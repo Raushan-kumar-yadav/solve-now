@@ -1,0 +1,207 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Python API: lint, typecheck, test, security
+  # ──────────────────────────────────────────────
+  api-lint:
+    name: "API — Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install ruff
+      - run: ruff check .
+
+  api-typecheck:
+    name: "API — Typecheck"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt mypy
+      - run: mypy . --ignore-missing-imports --exclude migrations
+
+  api-test:
+    name: "API — Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    services:
+      postgres:
+        image: ankane/pgvector:v0.5.1
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: solvenow_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt pytest pytest-cov
+      - name: Run Tests
+        run: pytest tests/ -v --cov=. --cov-report=xml --cov-fail-under=40
+        env:
+          ENVIRONMENT: development
+          POSTGRES_SERVER: localhost
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: solvenow_test
+          REDIS_HOST: localhost
+          SECRET_KEY: ci-test-secret-key-this-is-not-production
+      - uses: codecov/codecov-action@v4
+        with:
+          file: apps/api/coverage.xml
+          flags: api
+
+  api-security:
+    name: "API — Security Audit"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install pip-audit
+      - name: Audit Python dependencies
+        run: pip-audit -r requirements.txt --ignore-vuln GHSA-x9r6-8bwv-9qx6
+
+  # ──────────────────────────────────────────────
+  # Next.js Web: lint, typecheck, security
+  # ──────────────────────────────────────────────
+  web-lint:
+    name: "Web — Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --frozen-lockfile
+      - run: npm run lint
+
+  web-typecheck:
+    name: "Web — Typecheck"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --frozen-lockfile
+      - run: npx tsc --noEmit
+
+  web-security:
+    name: "Web — Security Audit"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --frozen-lockfile
+      - run: npm audit --audit-level=high
+
+  # ──────────────────────────────────────────────
+  # Docker: build all images to validate Dockerfiles
+  # ──────────────────────────────────────────────
+  docker-build:
+    name: "Docker — Build Images"
+    runs-on: ubuntu-latest
+    needs: [api-lint, api-test, web-lint, web-typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/api
+          file: ./infrastructure/docker/api.Dockerfile
+          push: false
+          tags: solvenow/api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/api
+          file: ./infrastructure/docker/worker.Dockerfile
+          push: false
+          tags: solvenow/worker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/web
+          file: ./infrastructure/docker/web.Dockerfile
+          push: false
+          tags: solvenow/web:ci
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://api.example.com
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
