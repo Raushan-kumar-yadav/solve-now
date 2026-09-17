@@ -432,15 +432,13 @@ export default function ProblemDetail() {
               <TabsList className="w-full justify-start sm:justify-center grid grid-cols-4 min-w-[320px]">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="solutions">Solutions</TabsTrigger>
-                <TabsTrigger value="ai">AI Panel</TabsTrigger>
                 <TabsTrigger value="chat">Chat</TabsTrigger>
               </TabsList>
             </div>
             <div className="px-4">
               <TabsContent value="overview" className="mt-0"><OverviewPanel /></TabsContent>
               <TabsContent value="solutions" className="mt-0"><SolutionsPanel /></TabsContent>
-              <TabsContent value="ai" className="mt-0"><AIPanel /></TabsContent>
-              <TabsContent value="chat" className="mt-0"><RoomChat publicId={publicId} currentUser={currentUser} /></TabsContent>
+              <TabsContent value="chat" className="mt-0"><RoomChat publicId={publicId} currentUser={currentUser} aiPanel={<AIPanel />} /></TabsContent>
             </div>
           </Tabs>
         </div>
@@ -456,9 +454,8 @@ export default function ProblemDetail() {
           </div>
           
           <div className="col-span-1 space-y-6 sticky top-24">
-            <AIPanel />
-            <div className="h-[400px]">
-              <RoomChat publicId={publicId} currentUser={currentUser} />
+            <div className="h-[600px]">
+              <RoomChat publicId={publicId} currentUser={currentUser} aiPanel={<AIPanel />} />
             </div>
           </div>
         </div>
