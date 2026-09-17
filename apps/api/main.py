@@ -121,7 +121,7 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+    allow_headers=["*"],
 )
 
 # Body size limit middleware
@@ -144,14 +144,14 @@ app.add_middleware(LimitUploadSize, max_upload_size=10 * 1024 * 1024)
 async def add_request_id(request: Request, call_next):
     request_id = str(uuid.uuid4())
     old_factory = logging.getLogRecordFactory()
-    
+
     def record_factory(*args, **kwargs):
         record = old_factory(*args, **kwargs)
         record.correlation_id = request_id
         return record
-        
+
     logging.setLogRecordFactory(record_factory)
-    
+
     start_time = time.time()
     try:
         response = await call_next(request)
@@ -161,10 +161,17 @@ async def add_request_id(request: Request, call_next):
         return response
     except Exception as exc:
         logger.error(f"Unhandled error: {exc}", exc_info=True)
-        return JSONResponse(
+        origin = request.headers.get("origin", "")
+        resp = JSONResponse(
             status_code=500,
             content={"detail": "Internal server error", "request_id": request_id}
         )
+        # Ensure CORS headers are present even on unhandled 500s
+        if origin in _cors_origins:
+            resp.headers["Access-Control-Allow-Origin"] = origin
+            resp.headers["Access-Control-Allow-Credentials"] = "true"
+            resp.headers["Vary"] = "Origin"
+        return resp
 
 @app.get("/health", tags=["monitoring"])
 def health_check():

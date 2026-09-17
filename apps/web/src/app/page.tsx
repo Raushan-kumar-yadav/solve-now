@@ -103,7 +103,7 @@ export default function HomePage() {
     const fetchFeeds = async () => {
       try {
         const [pRes, eRes, kRes] = await Promise.all([
-          api.get('/problems?limit=6'),
+          api.get('/problems?size=6'),
           api.get('/experts/search?limit=4'),
           api.get('/knowledge/search?limit=3').catch(() => ({ data: { results: [] } })),
         ])

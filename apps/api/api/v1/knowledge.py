@@ -27,29 +27,84 @@ class KnowledgeSearchResponse(BaseModel):
 
 @router.get("/search", response_model=List[KnowledgeSearchResponse])
 def search_knowledge(
-    q: str,
+    q: Optional[str] = "",
+    limit: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
     verified_only: bool = False,
     db: Session = Depends(get_db)
 ):
     """
     Hybrid Search combining pgvector and Full Text Search.
+    When q is empty, returns the most recently published documents.
     Ranking = (Vector Similarity) + (FTS Rank) + (0.1 * log(verification_count + 1)) + (0.01 * quality_score)
     """
-    if not q.strip():
-        return []
-        
+    q = (q or "").strip()
+    if not q:
+        # No query — return recent published docs
+        docs = (
+            db.query(KnowledgeDocument)
+            .filter(KnowledgeDocument.status == KnowledgeStatus.PUBLISHED)
+            .order_by(desc(KnowledgeDocument.created_at))
+            .limit(limit)
+            .all()
+        )
+        return [
+            KnowledgeSearchResponse(
+                id=d.id,
+                title=d.title,
+                content_snippet=d.content[:200] + "..." if len(d.content) > 200 else d.content,
+                category=None,
+                quality_score=d.quality_score,
+                verification_count=d.verification_count,
+                relevance=0.0,
+                created_at=d.created_at,
+            )
+            for d in docs
+        ]
+
     emb = generate_embedding(q)
-    
-    # In PostgreSQL, <=> is cosine distance, so smaller is closer.
-    # To convert distance to similarity: 1 - (distance)
-    
-    # We will use raw SQL for hybrid search to balance the text scores and embeddings easily.
-    # We format the vector string properly for pgvector.
+
+    # If no embedding (no AI key), fall back to text-only search
+    if emb is None:
+        base_query = """
+            SELECT
+                kd.id, kd.title, kd.content, c.name as category,
+                kd.quality_score, kd.verification_count, kd.created_at,
+                ts_rank_cd(to_tsvector('english', kd.title || ' ' || kd.content), plainto_tsquery('english', :query)) as text_score
+            FROM knowledge_documents kd
+            LEFT JOIN problem_categories c ON kd.category_id = c.id
+            WHERE kd.status = 'PUBLISHED'
+        """
+        params: dict = {"query": q, "limit": limit}
+        filters = []
+        if category:
+            filters.append("c.name = :category")
+            params["category"] = category
+        if verified_only:
+            filters.append("kd.verification_count > 0")
+        if filters:
+            base_query += " AND " + " AND ".join(filters)
+        final_query = base_query + " ORDER BY text_score DESC LIMIT :limit"
+        results = db.execute(text(final_query), params).mappings().all()
+        return [
+            KnowledgeSearchResponse(
+                id=r["id"],
+                title=r["title"],
+                content_snippet=r["content"][:200] + "..." if len(r["content"]) > 200 else r["content"],
+                category=r["category"],
+                quality_score=r["quality_score"],
+                verification_count=r["verification_count"],
+                relevance=float(r["text_score"]),
+                created_at=r["created_at"],
+            )
+            for r in results
+        ]
+
+    # Hybrid vector + text search
     vector_str = f"[{','.join(map(str, emb))}]"
     
     base_query = """
-        SELECT 
+        SELECT
             kd.id, kd.title, kd.content, c.name as category,
             kd.quality_score, kd.verification_count, kd.created_at,
             (1.0 - (kd.embedding <=> :vector)) as vector_score,
@@ -58,33 +113,30 @@ def search_knowledge(
         LEFT JOIN problem_categories c ON kd.category_id = c.id
         WHERE kd.status = 'PUBLISHED'
     """
-    
-    filters = []
-    params = {"query": q, "vector": vector_str}
-    
+
+    filters: list = []
+    params = {"query": q, "vector": vector_str, "limit": limit}
+
     if category:
         filters.append("c.name = :category")
         params["category"] = category
-        
+
     if verified_only:
         filters.append("kd.verification_count > 0")
-        
+
     if filters:
         base_query += " AND " + " AND ".join(filters)
-        
-    # Order by combined hybrid score
-    # Note: text_score is usually between 0 and 1, vector_score is usually between 0 and 1.
-    # We add a small bonus for verifications and quality score.
+
     final_query = base_query + """
         ORDER BY (
-            (1.0 - (kd.embedding <=> :vector)) * 0.7 + 
+            (1.0 - (kd.embedding <=> :vector)) * 0.7 +
             ts_rank_cd(to_tsvector('english', kd.title || ' ' || kd.content), plainto_tsquery('english', :query)) * 0.3 +
             LN(kd.verification_count + 1) * 0.1 +
             (kd.quality_score * 0.01)
         ) DESC
-        LIMIT 20
+        LIMIT :limit
     """
-    
+
     results = db.execute(text(final_query), params).mappings().all()
     
     response = []

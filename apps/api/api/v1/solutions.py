@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, desc
 from typing import List
 import uuid
 import logging
@@ -21,18 +21,21 @@ logger = logging.getLogger(__name__)
 def get_solution_with_stats(db: Session, solution: Solution, current_user_id: uuid.UUID = None) -> SolutionResponse:
     """
     Returns solution with aggregated vote/verification stats.
-    Uses a SINGLE query per solution (not 4 separate COUNTs).
+    Uses separate scalar queries to avoid table-name duplication errors in multi-join.
     """
-    # Aggregate all counts in one query
-    stats = db.query(
-        func.sum(case((SolutionVote.value == 1, 1), else_=0)).label("upvotes"),
-        func.sum(case((SolutionVote.value == -1, 1), else_=0)).label("downvotes"),
-        func.count(SolutionVerification.id.distinct()).label("verifications"),
-    ).outerjoin(
-        SolutionVote, SolutionVote.solution_id == solution.id
-    ).outerjoin(
-        SolutionVerification, SolutionVerification.solution_id == solution.id
-    ).filter(SolutionVote.solution_id == solution.id).first()
+    upvotes = db.query(func.count(SolutionVote.id)).filter(
+        SolutionVote.solution_id == solution.id,
+        SolutionVote.value == 1
+    ).scalar() or 0
+
+    downvotes = db.query(func.count(SolutionVote.id)).filter(
+        SolutionVote.solution_id == solution.id,
+        SolutionVote.value == -1
+    ).scalar() or 0
+
+    verifications = db.query(func.count(SolutionVerification.id)).filter(
+        SolutionVerification.solution_id == solution.id
+    ).scalar() or 0
 
     user_vote = 0
     if current_user_id:
@@ -44,9 +47,9 @@ def get_solution_with_stats(db: Session, solution: Solution, current_user_id: uu
             user_vote = vote
 
     resp = SolutionResponse.model_validate(solution)
-    resp.upvotes = int(stats.upvotes or 0)
-    resp.downvotes = int(stats.downvotes or 0)
-    resp.verification_count = int(stats.verifications or 0)
+    resp.upvotes = int(upvotes)
+    resp.downvotes = int(downvotes)
+    resp.verification_count = int(verifications)
     resp.user_vote = user_vote
     return resp
 
@@ -97,27 +100,28 @@ def get_solutions(
     problem = db.query(Problem).filter(Problem.public_id == public_id).first()
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
-        
-    solutions = db.query(Solution).filter(
-        Solution.problem_id == problem.id,
-        Solution.is_hidden == False
-    ).order_by(
-        desc(Solution.upvotes - Solution.downvotes), 
-        desc(Solution.created_at)
-    ).all()
-    
-    # Check user votes
-    for sol in solutions:
-        sol.user_vote = 0
-        if current_user:
-            vote = db.query(SolutionVote).filter(
-                SolutionVote.solution_id == sol.id, 
-                SolutionVote.user_id == current_user.id
-            ).first()
-            if vote:
-                sol.user_vote = vote.vote_value
-                
-    return solutions
+
+    # Subquery: net votes per solution (upvotes - downvotes)
+    from sqlalchemy import select, literal
+    net_votes_sq = (
+        select(func.coalesce(func.sum(SolutionVote.value), literal(0)))
+        .where(SolutionVote.solution_id == Solution.id)
+        .correlate(Solution)
+        .scalar_subquery()
+    )
+
+    solutions = (
+        db.query(Solution)
+        .filter(
+            Solution.problem_id == problem.id,
+            Solution.is_hidden == False,
+        )
+        .order_by(desc(net_votes_sq), desc(Solution.created_at))
+        .all()
+    )
+
+    current_user_id = current_user.id if current_user else None
+    return [get_solution_with_stats(db, sol, current_user_id) for sol in solutions]
 
 @router.post("/solutions/{solution_id}/vote")
 def vote_solution(

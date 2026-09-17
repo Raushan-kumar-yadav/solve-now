@@ -166,7 +166,7 @@ export default function ProblemDetail() {
           <div className="mt-4 pt-4 border-t flex flex-col gap-2 text-xs text-muted-foreground">
             <div className="flex justify-between"><span>Category</span> <span className="font-medium text-foreground">{problem.category?.name || 'General'}</span></div>
             <div className="flex justify-between"><span>Urgency</span> <span className="font-medium text-foreground capitalize">{problem.urgency}</span></div>
-            <div className="flex justify-between"><span>Author</span> <span className="font-medium text-foreground">{problem.author}</span></div>
+            <div className="flex justify-between"><span>Author</span> <span className="font-medium text-foreground">{problem.author_username ?? problem.author?.username ?? problem.author_id?.slice(0,8) ?? 'Unknown'}</span></div>
           </div>
         </CardContent>
       </Card>
@@ -230,7 +230,7 @@ export default function ProblemDetail() {
                 <div className="flex-1 space-y-2">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold">{sol.author || 'User'}</span>
+                      <span className="text-sm font-semibold">{sol.author?.username || (typeof sol.author === 'string' ? sol.author : 'User')}</span>
                       <span className="text-xs text-muted-foreground">Â· {formatDistanceToNow(new Date(sol.created_at))} ago</span>
                     </div>
                     {sol.status === 'ACCEPTED' && <span className="flex items-center text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded"><CheckCircle2 className="w-3 h-3 mr-1" /> Accepted</span>}
