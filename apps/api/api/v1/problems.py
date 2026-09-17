@@ -26,10 +26,7 @@ class ProblemDraft(BaseModel):
 
 @router.get("/categories")
 def get_categories(db: Session = Depends(get_db)):
-    """Return all problem categories — used by the explore page filter sidebar."""
-    categories = db.query(Category).order_by(Category.name).all()
-    return [{"id": str(c.id), "name": c.name} for c in categories]
-
+ main
 
 @router.post("/similar")
 def find_similar_problems(
@@ -174,10 +171,10 @@ def get_problems(
 
 @router.get("/search", response_model=PaginatedProblems)
 def search_problems(
-    q: str,
+    q: Optional[str] = "",
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=100)
 ):
     if not q.strip():
         return PaginatedProblems(items=[], total=0, page=page, size=size)

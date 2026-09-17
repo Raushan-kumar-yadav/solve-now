@@ -28,7 +28,8 @@ class KnowledgeSearchResponse(BaseModel):
 @router.get("/search", response_model=List[KnowledgeSearchResponse])
 def search_knowledge(
     q: Optional[str] = "",
-    limit: int = Query(20, ge=1, le=100),
+
+ main
     category: Optional[str] = None,
     verified_only: bool = False,
     db: Session = Depends(get_db)
@@ -38,30 +39,8 @@ def search_knowledge(
     When q is empty, returns the most recently published documents.
     Ranking = (Vector Similarity) + (FTS Rank) + (0.1 * log(verification_count + 1)) + (0.01 * quality_score)
     """
-    q = (q or "").strip()
-    if not q:
-        # No query — return recent published docs
-        docs = (
-            db.query(KnowledgeDocument)
-            .filter(KnowledgeDocument.status == KnowledgeStatus.PUBLISHED)
-            .order_by(desc(KnowledgeDocument.created_at))
-            .limit(limit)
-            .all()
-        )
-        return [
-            KnowledgeSearchResponse(
-                id=d.id,
-                title=d.title,
-                content_snippet=d.content[:200] + "..." if len(d.content) > 200 else d.content,
-                category=None,
-                quality_score=d.quality_score,
-                verification_count=d.verification_count,
-                relevance=0.0,
-                created_at=d.created_at,
-            )
-            for d in docs
-        ]
 
+    main
     emb = generate_embedding(q)
 
     # If no embedding (no AI key), fall back to text-only search

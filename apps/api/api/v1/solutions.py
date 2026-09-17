@@ -100,28 +100,7 @@ def get_solutions(
     problem = db.query(Problem).filter(Problem.public_id == public_id).first()
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
-
-    # Subquery: net votes per solution (upvotes - downvotes)
-    from sqlalchemy import select, literal
-    net_votes_sq = (
-        select(func.coalesce(func.sum(SolutionVote.value), literal(0)))
-        .where(SolutionVote.solution_id == Solution.id)
-        .correlate(Solution)
-        .scalar_subquery()
-    )
-
-    solutions = (
-        db.query(Solution)
-        .filter(
-            Solution.problem_id == problem.id,
-            Solution.is_hidden == False,
-        )
-        .order_by(desc(net_votes_sq), desc(Solution.created_at))
-        .all()
-    )
-
-    current_user_id = current_user.id if current_user else None
-    return [get_solution_with_stats(db, sol, current_user_id) for sol in solutions]
+main
 
 @router.post("/solutions/{solution_id}/vote")
 def vote_solution(

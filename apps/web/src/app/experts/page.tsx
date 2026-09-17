@@ -1,8 +1,9 @@
-﻿'use client'
+'use client'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Users, FileText } from 'lucide-react'
+import Link from 'next/link'
 
 export default function ExpertsPage() {
   return (
@@ -18,7 +19,9 @@ export default function ExpertsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">Share your knowledge and get matched with users who need your expertise to solve critical problems.</p>
-            <Button disabled>Application Currently Closed</Button>
+            <Link href="/experts/apply">
+              <Button>Apply Now</Button>
+            </Link>
           </CardContent>
         </Card>
 

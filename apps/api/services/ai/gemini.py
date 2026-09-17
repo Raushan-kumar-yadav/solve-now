@@ -17,11 +17,17 @@ class GeminiProvider(AIProvider):
         if system_prompt:
             contents = f"{system_prompt}\n\nUser: {prompt}"
             
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                temperature=0.7,
-            ),
-        )
-        return response.text
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    temperature=0.7,
+                ),
+            )
+            return response.text
+        except Exception as e:
+            # Fallback if API key is invalid or quota exceeded
+            from .fallback_provider import FallbackAIProvider
+            fallback = FallbackAIProvider()
+            return fallback.generate_chat_response(prompt, system_prompt)

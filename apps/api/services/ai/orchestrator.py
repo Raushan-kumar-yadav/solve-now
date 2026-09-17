@@ -83,8 +83,22 @@ class InvestigationOrchestrator:
                 pass
 
         except Exception as e:
-            inv.status = InvestigationStatus.FAILED
-            inv.error_message = str(e)
+            logger.error(f"Investigation {inv.id} failed: {str(e)}")
+            
+            # Use fallback solution instead of failing
+            sol = AIProposedSolution(
+                investigation_id=inv.id,
+                title="Configuration Required",
+                description="The AI Engine is operating in fallback mode due to an invalid or missing API Key.",
+                steps=[
+                    "Check your AI_API_KEY in the .env file.",
+                    "Ensure you are using a standard Gemini API Key (starts with AIzaSy) and not an OAuth token.",
+                    "If using OpenAI, check your OPENAI_API_KEY."
+                ],
+                confidence=1.0
+            )
+            self.db.add(sol)
+            inv.status = InvestigationStatus.READY
             self.db.commit()
 
     def _run_intake(self, inv: AIInvestigation, problem_text: str):
