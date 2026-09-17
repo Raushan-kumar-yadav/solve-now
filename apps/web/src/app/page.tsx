@@ -258,7 +258,7 @@ export default function HomePage() {
                 </div>
               )}
             </div>
-            <Button variant="outline" className="w-full" render={<Link href="/explore?status=OPEN" />}>
+            <Button variant="outline" className="w-full" render={<Link href="/explore?status=OPEN" />} nativeButton={false}>
               View All Open Problems
             </Button>
           </section>
@@ -317,7 +317,7 @@ export default function HomePage() {
                   </div>
                   <h3 className="font-semibold truncate">{expert.username}</h3>
                   <p className="text-xs text-muted-foreground mt-1">{expert.success_rate}% Success Rate</p>
-                  <Button variant="secondary" size="sm" className="w-full mt-4" render={<Link href={`/profile/${expert.user_id}`} />}>
+                  <Button variant="secondary" size="sm" className="w-full mt-4" render={<Link href={`/profile/${expert.user_id}`} />} nativeButton={false}>
                     View Profile
                   </Button>
                 </div>
