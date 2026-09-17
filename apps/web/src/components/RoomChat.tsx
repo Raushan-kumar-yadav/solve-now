@@ -5,7 +5,9 @@ import { api } from '@/lib/api'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Loader2, Maximize2, MoreVertical, Copy, Bot, Users } from 'lucide-react'
+import { Loader2, Maximize2, Minimize2, MoreVertical, Copy, Bot, Users } from 'lucide-react'
+import { Rnd } from 'react-rnd'
+import { createPortal } from 'react-dom'
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -28,6 +30,7 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set())
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
   const [connected, setConnected] = useState(false)
+  const [isFloating, setIsFloating] = useState(false)
 
   const ws = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
