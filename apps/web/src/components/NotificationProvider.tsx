@@ -34,7 +34,8 @@ export function NotificationProvider({ children, user }: { children: React.React
     const wsBase =
       process.env.NEXT_PUBLIC_WS_URL ||
       apiUrl.replace(/^http/, 'ws')  // http → ws, https → wss
-    const wsUrl = `${wsBase}/api/v1/ws/users/${user.id}`
+    const token = localStorage.getItem('token')
+    const wsUrl = `${wsBase}/api/v1/ws/users/${user.id}${token ? `?token=${token}` : ''}`
     ws.current = new WebSocket(wsUrl)
 
     ws.current.onmessage = (event) => {
