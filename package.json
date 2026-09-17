@@ -1,0 +1,14 @@
+{
+  "name": "solve-now",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names \"REDIS,API,WEB\" --prefix-colors \"magenta,yellow,cyan\" \"npm run dev:redis\" \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:redis": "C:\\Redis\\Redis-8.10.1-Windows-x64-msys2\\redis-server.exe",
+    "dev:api": "powershell -Command \"Set-Location apps/api; e:\\byom\\.venv\\Scripts\\uvicorn.exe main:app --reload --host 0.0.0.0 --port 8000\"",
+    "dev:web": "npm run dev --prefix apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}
