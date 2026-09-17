@@ -8,14 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Loader2, Maximize2, Minimize2, MoreVertical, Copy, Bot, Users } from 'lucide-react'
 import { Rnd } from 'react-rnd'
 import { createPortal } from 'react-dom'
-import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
-
 const WS_MAX_RETRIES = 8
-const WS_BASE_DELAY_MS = 1000  // 1s → 2s → 4s → 8s … max ~128s + jitter
-
+const WS_BASE_DELAY_MS = 1000  // 1s -> 2s -> 4s -> 8s ... max ~128s + jitter
 
 const getInitials = (name: string, email: string) => {
   if (name) return name.substring(0, 2).toUpperCase();
@@ -97,7 +94,7 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
     socket.onclose = (event) => {
       setConnected(false)
 
-      if (intentionalClose.current) return  // User navigated away — don't reconnect
+      if (intentionalClose.current) return  // User navigated away - don't reconnect
 
       if (retryCount.current >= WS_MAX_RETRIES) {
         if (process.env.NODE_ENV === 'development') {
@@ -119,7 +116,7 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
     }
 
     socket.onerror = () => {
-      // onclose will fire after onerror — backoff handled there
+      // onclose will fire after onerror - backoff handled there
       setConnected(false)
     }
 
@@ -153,7 +150,6 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
     
@@ -170,7 +166,6 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
     }
   }
 
-
   const handleInvite = () => {
     navigator.clipboard.writeText(window.location.href)
     alert("Invite link copied to clipboard!")
@@ -180,14 +175,12 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
     e.preventDefault()
     if (!inputValue.trim() || !room) return
     
-    // We send message via REST to ensure persistence
     try {
       const val = inputValue
       setInputValue('')
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
          ws.current.send(JSON.stringify({ type: 'typing.stopped' }))
       }
-      // Note: backend broadcasts via WS upon creation
       await api.post(`/rooms/${room.id}/messages`, { content: val })
     } catch (err) {
       console.error(err)
@@ -195,7 +188,6 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
   }
 
   if (!room) return <div className="flex justify-center p-4"><Loader2 className="animate-spin text-primary" /></div>
-
 
   const chatContent = (
     <>
@@ -206,7 +198,7 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
           </div>
         ) : (
           messages.map(msg => {
-            const isMe = msg.author_id === currentUser?.id
+            const isMe = Boolean(currentUser?.id && msg.author_id === currentUser.id)
             return (
               <div key={msg.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div className={`flex gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -252,7 +244,7 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
   )
 
   const RoomHeader = ({ showExpand = true }: { showExpand?: boolean }) => (
-    <CardHeader className="border-b py-3 bg-background z-10 flex-shrink-0">
+    <CardHeader className="border-b py-3 bg-background z-10 flex-shrink-0 cursor-move chat-drag-handle">
       <CardTitle className="text-lg flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span>Problem Room</span>
@@ -263,33 +255,9 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
         </div>
         <div className="flex items-center gap-1">
           {showExpand && (
-            <Dialog>
-              <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" />}>
-                  <Maximize2 className="h-4 w-4" />
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl w-[90vw] h-[85vh] p-0 flex flex-col gap-0 overflow-hidden [&>button]:hidden">
-                <DialogHeader className="sr-only">
-                   <DialogTitle>Expanded Chat</DialogTitle>
-                </DialogHeader>
-                <RoomHeader showExpand={false} />
-                <div className="flex-1 overflow-hidden">
-                  <Tabs defaultValue="chat" className="w-full h-full flex flex-col">
-                    <TabsList className="w-full justify-start rounded-none border-b h-12 bg-muted/30 px-4">
-                      <TabsTrigger value="chat" className="flex items-center gap-2"><Users className="w-4 h-4"/> Team Chat</TabsTrigger>
-                      {aiPanel && <TabsTrigger value="ai" className="flex items-center gap-2"><Bot className="w-4 h-4"/> AI Agent</TabsTrigger>}
-                    </TabsList>
-                    <TabsContent value="chat" className="flex-1 overflow-hidden m-0 flex flex-col h-[calc(85vh-100px)]">
-                      {chatContent}
-                    </TabsContent>
-                    {aiPanel && (
-                      <TabsContent value="ai" className="flex-1 overflow-auto m-0 p-4">
-                        {aiPanel}
-                      </TabsContent>
-                    )}
-                  </Tabs>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => setIsFloating(!isFloating)}>
+              {isFloating ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
           )}
           
           <DropdownMenu>
@@ -307,8 +275,8 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
     </CardHeader>
   )
 
-  return (
-    <Card className="flex flex-col h-full border-0 shadow-none sm:border sm:shadow-sm overflow-hidden">
+  const innerContent = (
+    <Card className="flex flex-col h-full w-full border-0 shadow-none sm:border sm:shadow-sm overflow-hidden bg-background">
       <RoomHeader />
       <Tabs defaultValue="chat" className="flex-1 flex flex-col h-[calc(100%-60px)]">
         {aiPanel && (
@@ -329,5 +297,38 @@ export function RoomChat({ publicId, currentUser, aiPanel }: { publicId: string,
     </Card>
   )
 
-}
+  if (isFloating) {
+    return (
+      <>
+        {/* Placeholder where the original chat was */}
+        <div className="flex flex-col h-full border-2 border-dashed rounded-xl items-center justify-center p-6 text-center text-muted-foreground bg-muted/20">
+          <Maximize2 className="w-8 h-8 mb-4 opacity-50" />
+          <p>Chat is opened in floating mode.</p>
+          <Button variant="outline" className="mt-4" onClick={() => setIsFloating(false)}>Restore Chat</Button>
+        </div>
+        
+        {typeof document !== 'undefined' && createPortal(
+          <Rnd
+            default={{
+              x: window.innerWidth / 2 - 400,
+              y: window.innerHeight / 2 - 300,
+              width: 800,
+              height: 600,
+            }}
+            style={{ position: 'fixed', zIndex: 9999 }}
+            minWidth={400}
+            minHeight={400}
+            bounds="window"
+            dragHandleClassName=".chat-drag-handle"
+            className="shadow-2xl rounded-xl overflow-hidden bg-background"
+          >
+            {innerContent}
+          </Rnd>,
+          document.body
+        )}
+      </>
+    )
+  }
 
+  return innerContent
+}
